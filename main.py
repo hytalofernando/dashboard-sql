@@ -80,12 +80,6 @@ def login_page():
                         st.error("❌ " + result['message'])
                 else:
                     st.warning("⚠️ Por favor, preencha todos os campos")
-        
-        st.info("""
-        **👥 Usuários padrão:**
-        - **Admin:** `admin` / `admin123` (Acesso completo)
-        - **Usuário:** `usuario` / `usuario123` (Visualização apenas)
-        """)
 
 
 def dashboard_page():
