@@ -29,7 +29,8 @@ wheels/
 *.sqlite3
 
 # Streamlit
-.streamlit/
+.streamlit/secrets.toml
+.streamlit/credentials.toml
 
 # IDE
 .vscode/
