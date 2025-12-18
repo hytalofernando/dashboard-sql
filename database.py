@@ -60,10 +60,39 @@ def _get_database_url() -> str:
 
 # Configuração do banco de dados (SQLite ou PostgreSQL)
 DATABASE_URL = _get_database_url()
-engine = create_engine(
-    DATABASE_URL,
-    connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {},
-)
+
+# Log para debug (não mostra senha completa)
+if DATABASE_URL.startswith("postgresql"):
+    masked_url = DATABASE_URL.split("@")[0][:30] + "***@" + DATABASE_URL.split("@")[1] if "@" in DATABASE_URL else "postgresql://***"
+    print(f"📊 Usando PostgreSQL: {masked_url}")
+else:
+    print(f"📊 Usando SQLite: {DATABASE_URL}")
+
+try:
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {},
+        pool_pre_ping=True,  # Testa conexão antes de usar
+        pool_recycle=3600,   # Recicla conexões a cada hora
+    )
+    
+    # Testa a conexão
+    with engine.connect() as conn:
+        if DATABASE_URL.startswith("postgresql"):
+            result = conn.execute(text("SELECT version()"))
+            version = result.fetchone()[0]
+            print(f"✅ PostgreSQL conectado: {version[:50]}...")
+        else:
+            print("✅ SQLite conectado")
+            
+except Exception as e:
+    print(f"❌ Erro ao conectar ao banco: {str(e)}")
+    print("⚠️ Caindo para SQLite local...")
+    DATABASE_URL = f"sqlite:///{os.path.join(os.getcwd(), 'estoque.db')}"
+    engine = create_engine(
+        DATABASE_URL,
+        connect_args={"check_same_thread": False},
+    )
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 
