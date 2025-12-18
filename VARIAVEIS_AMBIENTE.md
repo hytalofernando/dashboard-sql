@@ -227,3 +227,4 @@ DATABASE_URL = "postgresql+psycopg2://usuario:senha@host:5432/database"
 
 **Pronto para fazer deploy?** Siga o guia `DEPLOY_STREAMLIT.md`! 🚀
 
+

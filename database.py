@@ -13,39 +13,53 @@ except Exception:
     StreamlitSecretNotFoundError = Exception  # fallback
 
 
-def _get_sqlite_url() -> str:
+def _get_database_url() -> str:
     """
-    Retorna a URL do banco SQLite, permitindo configuração via:
-    - Variável de ambiente: SQLITE_PATH
-    - st.secrets["SQLITE_PATH"] (quando em Streamlit Cloud)
-    Caso não definido, usa o estoque.db na pasta atual.
+    Retorna a URL do banco de dados, permitindo configuração via:
+    - Variável de ambiente: DATABASE_URL (PostgreSQL ou SQLite completo)
+    - st.secrets["DATABASE_URL"] (quando em Streamlit Cloud)
+    - Variável de ambiente: SQLITE_PATH (apenas caminho do SQLite)
+    - st.secrets["SQLITE_PATH"]
+    Caso não definido, usa o estoque.db na pasta atual (SQLite).
     """
-    # 1) Variável de ambiente
+    # 1) DATABASE_URL completa (prioridade máxima) - suporta PostgreSQL
+    db_url = os.environ.get("DATABASE_URL")
+    
+    # 2) DATABASE_URL via Streamlit secrets
+    if not db_url and st:
+        try:
+            db_url = st.secrets.get("DATABASE_URL", None)
+        except (StreamlitSecretNotFoundError, Exception):
+            db_url = None
+    
+    # Se encontrou DATABASE_URL, retorna ela (pode ser PostgreSQL ou SQLite completo)
+    if db_url:
+        return db_url
+    
+    # 3) SQLITE_PATH via variável de ambiente (fallback para SQLite)
     path = os.environ.get("SQLITE_PATH")
-
-    # 2) Secrets do Streamlit
+    
+    # 4) SQLITE_PATH via Streamlit secrets
     if not path and st:
         try:
             path = st.secrets.get("SQLITE_PATH", None)
-        except StreamlitSecretNotFoundError:
+        except (StreamlitSecretNotFoundError, Exception):
             path = None
-        except Exception:
-            path = None
-
-    # 3) Padrão local
+    
+    # 5) Padrão local (SQLite)
     if not path:
         path = os.path.join(os.getcwd(), "estoque.db")
-
+    
     # Normaliza para URL SQLite
     if not path.startswith("sqlite:///"):
         # Substitui separador para não quebrar no Windows
         normalized = path.replace("\\", "/")
         path = f"sqlite:///{normalized}"
-
+    
     return path
 
-# Configuração do banco de dados SQLite
-DATABASE_URL = _get_sqlite_url()
+# Configuração do banco de dados (SQLite ou PostgreSQL)
+DATABASE_URL = _get_database_url()
 engine = create_engine(
     DATABASE_URL,
     connect_args={"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {},
@@ -56,13 +70,28 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 def migrate_db():
     """Adiciona colunas necessárias e corrige constraints da tabela equipments"""
     try:
+        # Detecta se é PostgreSQL ou SQLite
+        is_postgres = DATABASE_URL.startswith("postgresql")
+        
         with engine.connect() as conn:
-            # Verifica se a tabela existe
-            result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='equipments'"))
+            # Verifica se a tabela existe (compatível com ambos)
+            if is_postgres:
+                result = conn.execute(text("""
+                    SELECT table_name FROM information_schema.tables 
+                    WHERE table_schema='public' AND table_name='equipments'
+                """))
+            else:
+                result = conn.execute(text("SELECT name FROM sqlite_master WHERE type='table' AND name='equipments'"))
+            
             if not result.fetchone():
                 return  # Tabela não existe, será criada pelo create_all
             
-            # Verifica quais colunas já existem
+            # PostgreSQL não precisa de migração (modelo já está correto)
+            # Apenas SQLite pode ter problemas de UNIQUE constraint
+            if is_postgres:
+                return
+            
+            # Verifica quais colunas já existem (SQLite)
             result = conn.execute(text("PRAGMA table_info(equipments)"))
             columns = [row[1] for row in result]
             
@@ -71,10 +100,8 @@ def migrate_db():
             table_sql = result.fetchone()[0]
             
             # Verifica se o SQL da tabela contém UNIQUE na definição do código
-            # Procura por padrões como "codigo TEXT UNIQUE" ou "codigo VARCHAR UNIQUE"
             needs_fix = False
             if table_sql:
-                # Divide o SQL em linhas e procura pela definição do código
                 lines = table_sql.split('\n')
                 for line in lines:
                     line_upper = line.upper().strip()

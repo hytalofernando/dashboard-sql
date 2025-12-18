@@ -165,3 +165,4 @@ E eu ajusto imediatamente!
 
 **O projeto está otimizado e pronto para o Streamlit Cloud!** 🎉
 
+

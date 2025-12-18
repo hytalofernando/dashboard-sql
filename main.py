@@ -3,9 +3,11 @@ import plotly.express as px
 import plotly.graph_objects as go
 import pandas as pd
 from datetime import datetime
-from database import init_db, get_db_session
+import os
+from database import init_db, get_db_session, DATABASE_URL, engine
 from models import Equipment
 from auth import authenticate_user
+from sqlalchemy import text
 
 # Configuração da página
 st.set_page_config(

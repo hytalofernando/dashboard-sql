@@ -116,3 +116,4 @@ O Streamlit Cloud vai detectar e fazer redeploy automaticamente.
 
 **Consulte `VARIAVEIS_AMBIENTE.md` para configuração detalhada de banco de dados.**
 
+
